@@ -1,0 +1,3 @@
+import PageShell from '../../components/page-shell';
+import {courses} from '../../content/site';
+export default function School(){return <PageShell active="School" title="School & coursework." description="A place for what I’m learning, from course notes to academic work.">{courses.length?<section className="directory">{courses.map(c=><article className="empty" key={c.code}><p>{c.code}</p><h2>{c.title}</h2><p>{c.description}</p>{c.url&&<a className="text-link" href={c.url}>View coursework</a>}</article>)}</section>:<section className="empty"><h2>Learning, collected here.</h2><p className="muted">School details and selected coursework are coming soon.</p></section>}</PageShell>}

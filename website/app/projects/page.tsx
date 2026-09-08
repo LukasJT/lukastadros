@@ -1,0 +1,3 @@
+import PageShell from '../../components/page-shell';
+import {projects} from '../../content/site';
+export default function Projects(){return <PageShell active="Projects" title="Projects." description="A collection of things I make, explore, and work on.">{projects.length?<section>{projects.map(p=><article className="empty" key={p.title}><h2>{p.title}</h2><p>{p.description}</p>{p.url&&<a className="text-link" href={p.url}>View project</a>}</article>)}</section>:<section className="empty"><h2>More to share soon.</h2><p className="muted">Selected projects, write-ups, and links will live here.</p></section>}</PageShell>}
