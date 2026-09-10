@@ -19,3 +19,33 @@ test('streamed content limits apply even without content-length',async()=>{await
 test('migration and revision checks prevent stale writes',async()=>{const db=new DatabaseSync(':memory:');db.exec(await readFile(new URL('../drizzle/0000_good_colossus.sql',import.meta.url),'utf8'));const insert=db.prepare('INSERT OR IGNORE INTO site_content (id, document, revision, updated_at) VALUES (1, ?, 1, ?)');assert.equal(insert.run('{"value":1}','now').changes,1);assert.equal(insert.run('{"value":2}','now').changes,0);const update=db.prepare('UPDATE site_content SET document = ?, revision = revision + 1, updated_at = ? WHERE id = 1 AND revision = ?');assert.equal(update.run('{"value":3}','now',1).changes,1);assert.equal(update.run('{"value":4}','now',1).changes,0);assert.equal(db.prepare('SELECT document FROM site_content WHERE id=1').get().document,'{"value":3}');db.close();});
 process.on('exit',()=>{});
 test.after(async()=>rm(dir,{recursive:true,force:true}));
+
+test('real owner guard pins only the preapproved account and keeps a stable identity',async()=>{
+ const db=new DatabaseSync(':memory:');db.exec(await readFile(new URL('../drizzle/0000_good_colossus.sql',import.meta.url),'utf8'));db.exec(await readFile(new URL('../drizzle/0001_daffy_chamber.sql',import.meta.url),'utf8'));
+ const binding={prepare(sql){let args=[];return {bind(...values){args=values;return this;},async first(){return db.prepare(sql).get(...args)||null;},async run(){const result=db.prepare(sql).run(...args);return {meta:{changes:Number(result.changes)}};}};}};
+ const objects=new Map();
+ globalThis.cmsTest={user:null,config:{DB:binding,OWNER_EMAIL:'owner@example.test',SITE_ORIGIN:'https://site.test',PHOTOS:{async put(id,data,options){objects.set(id,{data,options});},async delete(id){objects.delete(id);}}}};
+ await writeFile(join(dir,'auth.mjs'),'export async function getChatGPTUser(){return globalThis.cmsTest.user;}');
+ await writeFile(join(dir,'storage.mjs'),'export function bindings(){return globalThis.cmsTest.config;} export function database(){return bindings().DB;}');
+ const owner=await compile('../lib/owner.ts','owner.mjs',[["'./request-policy'","'./policy.mjs'"],["'../app/chatgpt-auth'","'./auth.mjs'"],["'./storage'","'./storage.mjs'"]]);
+ assert.equal(await owner.isOwner(),false);
+ globalThis.cmsTest.user={userId:'stranger',email:'stranger@example.test'};assert.equal(await owner.isOwner(),false);assert.equal(db.prepare('SELECT count(*) AS n FROM owner_identity').get().n,0);
+ globalThis.cmsTest.user={userId:'real-owner',email:'OWNER@example.test'};assert.equal(await owner.isOwner(),true);
+ globalThis.cmsTest.user={userId:'new-id',email:'owner@example.test'};assert.equal(await owner.isOwner(),false);
+ globalThis.cmsTest.user={userId:'real-owner',email:'new-email@example.test'};assert.equal(await owner.isOwner(),true);
+ assert.equal((await owner.authorizeWrite(new Request('https://site.test/api/content',{method:'PUT',headers:{origin:'https://evil.test'}}))).status,403);
+ const content=await compile('../app/api/content/route.ts','content-route.mjs',[["'../../../lib/request-policy'","'./policy.mjs'"],["'../../../lib/owner'","'./owner.mjs'"],["'../../../lib/storage'","'./storage.mjs'"],["'../../../content/model'","'./model.mjs'"]]);
+ const update=revision=>new Request('https://site.test/api/content',{method:'PUT',headers:{origin:'https://site.test','content-type':'application/json'},body:JSON.stringify({content:clone(),revision})});
+ assert.equal((await content.PUT(update(0))).status,200);assert.equal((await content.PUT(update(0))).status,409);
+ globalThis.cmsTest.user={userId:'visitor',email:'visitor@example.test'};assert.equal((await content.PUT(update(1))).status,403);
+ globalThis.cmsTest.user=null;assert.equal((await content.PUT(update(1))).status,401);
+ const upload=await compile('../app/api/uploads/route.ts','uploads-route.mjs',[["'../../../lib/owner'","'./owner.mjs'"],["'../../chatgpt-auth'","'./auth.mjs'"],["'../../../lib/storage'","'./storage.mjs'"]]);
+ const photo=new Uint8Array(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j/1kAAAAASUVORK5CYII=','base64'));
+ const request=()=>new Request('https://site.test/api/uploads',{method:'POST',headers:{origin:'https://site.test','content-type':'image/png'},body:photo});
+ assert.equal((await upload.POST(request())).status,401);
+ globalThis.cmsTest.user={userId:'real-owner',email:'new-email@example.test'};
+ const response=await upload.POST(request());assert.equal(response.status,201);const {src}=await response.json();assert.match(src,/^\/media\//);assert.equal(objects.size,1);assert.equal(db.prepare('SELECT count(*) AS n FROM media').get().n,1);
+ const updated=clone();updated.portrait={src,alt:'Test photo'};const saved=await content.PUT(new Request('https://site.test/api/content',{method:'PUT',headers:{origin:'https://site.test','content-type':'application/json'},body:JSON.stringify({content:updated,revision:1})}));assert.equal(saved.status,200);
+ assert.equal(JSON.parse(db.prepare('SELECT document FROM site_content').get().document).portrait.src,src);
+ db.close();delete globalThis.cmsTest;
+});

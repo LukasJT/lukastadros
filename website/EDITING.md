@@ -13,8 +13,9 @@ Text and media metadata live in D1; photos live in R2. Redeployments do not repl
 
 ## Authorization and operations
 
-The server checks the dispatch-authenticated, site-scoped user ID against `ADMIN_USER_ID` on every write and protects writes with an exact `SITE_ORIGIN` check. Never put owner credentials or secrets in source. With no owner ID configured, editing is denied. The site access policy remains unchanged. `/api/session` returns only the currently signed-in user's ID for owner provisioning; it cannot assign privileges.
+The server checks the dispatch-authenticated, site-scoped user ID against `ADMIN_USER_ID` on every write and protects writes with an exact `SITE_ORIGIN` check. Never put owner credentials or secrets in source. At first sign-in, the verified email must match OWNER_EMAIL (provisioned from the Sites owner record); the site-scoped ID is then pinned in owner_identity. Other visitors cannot claim ownership. With neither an explicit owner ID nor a pinned identity nor a provisioned owner email, editing is denied. The site access policy remains unchanged. `/api/session` returns only the currently signed-in user's ID for owner provisioning; it cannot assign privileges.
 
-Production needs `DB`, `PHOTOS`, `ADMIN_USER_ID`, and `SITE_ORIGIN`. Schema migrations under `drizzle/` must remain append-only after deployment. Local development uses its own credentials and storage; do not reuse production identity locally.
+Production needs `DB`, `PHOTOS`, `SITE_ORIGIN`, and either `ADMIN_USER_ID` or the initial `OWNER_EMAIL`. Schema migrations under `drizzle/` must remain append-only after deployment. Local development uses its own credentials and storage; do not reuse production identity locally.
 
 Run `node --test tests/content.test.mjs`, `npx tsc --noEmit`, and `npm run build` to validate changes. Optional WebMCP read/stage tools feature-detect browser support and never publish changes automatically.
+
