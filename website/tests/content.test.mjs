@@ -1,0 +1,21 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFile,mkdtemp,writeFile,rm} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {pathToFileURL} from 'node:url';
+import {DatabaseSync} from 'node:sqlite';
+import ts from 'typescript';
+const dir=await mkdtemp(join(tmpdir(),'portfolio-tests-'));
+async function compile(src,name,replace=[]) {let code=await readFile(new URL(src,import.meta.url),'utf8');for(const [a,b] of replace)code=code.replace(a,b);await writeFile(join(dir,name),ts.transpileModule(code,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText);return import(pathToFileURL(join(dir,name)).href);}
+await compile('../content/site.ts','site.mjs');
+const {defaultContent,validateContent}=await compile('../content/model.ts','model.mjs',[["'./site'","'./site.mjs'"]]);
+const {canWrite,limitedText}=await compile('../lib/request-policy.ts','policy.mjs');
+const clone=()=>structuredClone(defaultContent);
+test('unmodified portfolio remains valid',()=>assert.deepEqual(validateContent(clone()),defaultContent));
+test('rejects script URLs, invalid map coordinates, and undescribed photos',()=>{const c=clone();c.projects=[{title:'Test',description:'',url:'javascript:alert(1)'}];assert.throws(()=>validateContent(c),/Links/);c.projects=[];c.places=[{id:'test',name:'Test',country:'',description:'',lat:91,lng:0,photos:[]}];assert.throws(()=>validateContent(c),/latitude/);c.places=[];c.portrait={src:'/media/00000000-0000-0000-0000-000000000000',alt:''};assert.throws(()=>validateContent(c),/description/);c.portrait={src:'https://example.com/photo.png',alt:'test'};assert.throws(()=>validateContent(c),/uploaded/);});
+test('owner and exact same origin are both required',()=>{assert.equal(canWrite('owner','owner','https://site.test','https://site.test'),true);for(const args of [[null,'owner','https://site.test','https://site.test'],['visitor','owner','https://site.test','https://site.test'],['owner',undefined,'https://site.test','https://site.test'],['owner','owner','https://evil.test','https://site.test'],['owner','owner',null,'https://site.test'],['owner','owner','https://site.test.evil.test','https://site.test']])assert.equal(canWrite(...args),false);});
+test('streamed content limits apply even without content-length',async()=>{await assert.rejects(limitedText(new Request('https://site.test',{method:'PUT',body:'a'.repeat(100)}),10),/too large/);assert.equal(await limitedText(new Request('https://site.test',{method:'PUT',body:'hello'}),10),'hello');});
+test('migration and revision checks prevent stale writes',async()=>{const db=new DatabaseSync(':memory:');db.exec(await readFile(new URL('../drizzle/0000_good_colossus.sql',import.meta.url),'utf8'));const insert=db.prepare('INSERT OR IGNORE INTO site_content (id, document, revision, updated_at) VALUES (1, ?, 1, ?)');assert.equal(insert.run('{"value":1}','now').changes,1);assert.equal(insert.run('{"value":2}','now').changes,0);const update=db.prepare('UPDATE site_content SET document = ?, revision = revision + 1, updated_at = ? WHERE id = 1 AND revision = ?');assert.equal(update.run('{"value":3}','now',1).changes,1);assert.equal(update.run('{"value":4}','now',1).changes,0);assert.equal(db.prepare('SELECT document FROM site_content WHERE id=1').get().document,'{"value":3}');db.close();});
+process.on('exit',()=>{});
+test.after(async()=>rm(dir,{recursive:true,force:true}));
