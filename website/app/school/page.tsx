@@ -1,0 +1,4 @@
+import PageShell from '../../components/page-shell';
+import {readContent} from '../../lib/content';
+export const dynamic='force-dynamic';
+export default async function School(){const {content}=await readContent();const {copy:c,courses}=content;return <PageShell active="School" name={c.name} footer={c.footer} title={c.schoolTitle} description={c.schoolDescription}>{courses.length?<section className="directory">{courses.map((course,i)=><article className="empty" key={i}><p>{course.code}</p><h2>{course.title}</h2><p className="preserve-lines">{course.description}</p>{course.photo&&<figure><img className="content-photo" src={course.photo.src} alt={course.photo.alt} loading="lazy"/><figcaption>{course.photo.caption}</figcaption></figure>}{course.url&&<a className="text-link" href={course.url}>View coursework</a>}</article>)}</section>:<section className="empty"><h2>{c.schoolEmptyTitle}</h2><p className="muted">{c.schoolEmptyDescription}</p></section>}</PageShell>}

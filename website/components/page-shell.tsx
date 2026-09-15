@@ -1,0 +1,3 @@
+
+export default function PageShell({active,title,description,children,name='Lukas Tadros',footer='A work in progress.'}:{active:string;title:string;description:string;children:React.ReactNode;name?:string;footer?:string}){return <><header className="header"><a className="wordmark" href="/">{name}<span className="dot">.</span></a><nav aria-label="Main navigation">{[['Home','/'],['School','/school'],['Projects','/projects'],['Travel','/travel']].map(([label,url])=><a key={url} href={url} aria-current={active===label?'page':undefined}>{label}</a>)}</nav></header><main id="main"><section className="page-title"><h1>{title}</h1><p className="preserve-lines">{description}</p></section>{children}</main><footer><a href="/">{name}</a><span>{footer}</span></footer></>}
+

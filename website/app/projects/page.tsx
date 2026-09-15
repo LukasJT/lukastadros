@@ -1,0 +1,4 @@
+import PageShell from '../../components/page-shell';
+import {readContent} from '../../lib/content';
+export const dynamic='force-dynamic';
+export default async function Projects(){const {content}=await readContent();const {copy:c,projects}=content;return <PageShell active="Projects" name={c.name} footer={c.footer} title={c.projectsTitle} description={c.projectsDescription}>{projects.length?<section>{projects.map((p,i)=><article className="empty" key={i}><h2>{p.title}</h2><p className="preserve-lines">{p.description}</p>{p.photo&&<figure><img className="content-photo" src={p.photo.src} alt={p.photo.alt} loading="lazy"/><figcaption>{p.photo.caption}</figcaption></figure>}{p.url&&<a className="text-link" href={p.url}>View project</a>}</article>)}</section>:<section className="empty"><h2>{c.projectsEmptyTitle}</h2><p className="muted">{c.projectsEmptyDescription}</p></section>}</PageShell>}
