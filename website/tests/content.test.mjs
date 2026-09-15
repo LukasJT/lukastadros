@@ -49,3 +49,5 @@ test('real owner guard pins only the preapproved account and keeps a stable iden
  assert.equal(JSON.parse(db.prepare('SELECT document FROM site_content').get().document).portrait.src,src);
  db.close();delete globalThis.cmsTest;
 });
+
+test('custom domain allowlist uses exact origins',()=>{const origins='https://lukas-tadros-portfolio.lukajt.chatgpt.site,https://lukastadros.com';assert.equal(canWrite('owner','owner','https://lukastadros.com',origins),true);assert.equal(canWrite('owner','owner','https://lukas-tadros-portfolio.lukajt.chatgpt.site',origins),true);assert.equal(canWrite('owner','owner','https://lukastadros.com.evil.test',origins),false);assert.equal(canWrite('owner','owner','http://lukastadros.com',origins),false);assert.equal(canWrite('other','owner','https://lukastadros.com',origins),false);});
